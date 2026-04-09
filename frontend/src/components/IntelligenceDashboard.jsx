@@ -38,24 +38,24 @@ const IntelligenceDashboard = ({ logs }) => {
 
               {log.metadata && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.75rem' }}>
-                  {log.metadata.detected_language && (
+                  {log.metadata.language && (
                     <span className="glass-pill" style={{ color: 'var(--accent-blue)' }}>
-                      <Globe size={12} /> {log.metadata.detected_language}
+                      <Globe size={12} /> {log.metadata.language}
                     </span>
                   )}
-                  {log.metadata.intent && (
+                  {log.metadata.route && (
                     <span className="glass-pill" style={{ color: 'var(--accent-pink)' }}>
-                      <MessageCircle size={12} /> {log.metadata.intent}
+                      <MessageCircle size={12} /> {log.metadata.route}
                     </span>
                   )}
-                  {log.metadata.routing && (
+                  {log.metadata.model && (
                     <span className="glass-pill" style={{ color: 'var(--accent-green)' }}>
-                      <Cpu size={12} /> Model: {log.metadata.routing.model}
+                      <Cpu size={12} /> Model: {log.metadata.model}
                     </span>
                   )}
-                  {log.metadata.sentiment?.urgency_score > 50 && (
-                    <span className="glass-pill" style={{ color: 'var(--danger)', borderColor: 'rgba(239, 68, 68, 0.3)' }}>
-                      <AlertTriangle size={12} /> Urgent
+                  {log.metadata.latency_ms && (
+                    <span className="glass-pill" style={{ color: 'var(--accent-purple)' }}>
+                      <Activity size={12} /> {log.metadata.latency_ms}ms
                     </span>
                   )}
                 </div>

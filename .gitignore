@@ -21,3 +21,7 @@ dist-ssr/
 # OS
 .DS_Store
 Thumbs.db
+# Models
+models/
+# Tools
+tools/

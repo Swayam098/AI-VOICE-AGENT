@@ -50,12 +50,47 @@ class MediaStreamHandler:
         self.memory = memory
         self.active_sessions: dict[str, CallSession] = {}
 
+    def _audio_energy(self, mulaw_bytes: bytes) -> float:
+        """Calculate RMS energy of μ-law encoded audio to detect speech vs silence."""
+        if not mulaw_bytes:
+            return 0.0
+        # μ-law decode table (simplified): convert to linear amplitude
+        # For speed, just use the raw byte values — μ-law silence is ~127/255
+        import struct
+        samples = struct.unpack(f'{len(mulaw_bytes)}B', mulaw_bytes)
+        # μ-law midpoint is 0xFF (255) for silence. Distance from midpoint = energy.
+        energy = sum((s - 127) ** 2 for s in samples) / len(samples)
+        return energy ** 0.5  # RMS
+
     async def handle_twilio_stream(self, websocket: WebSocket):
-        """Handle a Twilio Media Stream WebSocket connection."""
+        """Handle a Twilio Media Stream WebSocket connection with VAD."""
         await websocket.accept()
         session: Optional[CallSession] = None
+        processing_lock = asyncio.Lock()
 
         logger.info("Twilio Media Stream WebSocket connected")
+
+        # Energy threshold for speech detection (μ-law RMS)
+        SPEECH_ENERGY_THRESHOLD = 10.0
+        # Min audio buffer size before processing (in bytes, ~0.5s at 8kHz)
+        MIN_BUFFER_SIZE = 4000
+        # Silence duration to trigger processing (seconds)
+        SILENCE_TIMEOUT = 1.5
+
+        async def silence_monitor():
+            """Background task to check for silence and trigger processing."""
+            nonlocal session
+            while True:
+                await asyncio.sleep(0.3)  # check every 300ms
+                if session and session.is_speaking and not processing_lock.locked():
+                    elapsed = time.time() - session.last_speech_time
+                    if elapsed >= SILENCE_TIMEOUT and len(session.audio_buffer) >= MIN_BUFFER_SIZE:
+                        async with processing_lock:
+                            session.is_speaking = False
+                            logger.info(f"[{session.session_id}] Silence detected ({elapsed:.1f}s) — processing {len(session.audio_buffer)} bytes")
+                            await self._process_audio(session, websocket, mode="twilio")
+
+        monitor_task = asyncio.create_task(silence_monitor())
 
         try:
             async for raw_message in websocket.iter_text():
@@ -78,19 +113,27 @@ class MediaStreamHandler:
                     payload = message.get("media", {}).get("payload", "")
                     if payload:
                         audio_bytes = base64.b64decode(payload)
-                        session.audio_buffer.extend(audio_bytes)
-                        session.last_speech_time = time.time()
-                        session.is_speaking = True
+                        energy = self._audio_energy(audio_bytes)
 
-                    # Check for silence → process accumulated audio
-                    await self._check_and_process(session, websocket, mode="twilio")
+                        if energy > SPEECH_ENERGY_THRESHOLD:
+                            # Real speech detected
+                            session.audio_buffer.extend(audio_bytes)
+                            session.last_speech_time = time.time()
+                            if not session.is_speaking:
+                                session.is_speaking = True
+                                logger.debug(f"[{session.session_id}] Speech started (energy: {energy:.1f})")
+                        else:
+                            # Silence — still buffer it for context but don't update speech time
+                            if session.is_speaking:
+                                session.audio_buffer.extend(audio_bytes)
 
                 elif event == "stop":
                     logger.info(f"Stream stopped — Session: {session.session_id if session else 'unknown'}")
                     if session:
                         # Process any remaining audio
-                        if len(session.audio_buffer) > 0:
-                            await self._process_audio(session, websocket, mode="twilio")
+                        if len(session.audio_buffer) >= MIN_BUFFER_SIZE:
+                            async with processing_lock:
+                                await self._process_audio(session, websocket, mode="twilio")
                         self.active_sessions.pop(session.session_id, None)
                     break
 
@@ -99,6 +142,7 @@ class MediaStreamHandler:
         except Exception as e:
             logger.error(f"Media stream error: {e}")
         finally:
+            monitor_task.cancel()
             if session:
                 self.active_sessions.pop(session.session_id, None)
 

@@ -3,10 +3,16 @@ Configuration module for the AI Voice Call Agent.
 Uses Pydantic Settings for validated environment-based configuration.
 """
 
+import os
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from pydantic import Field
 from typing import Optional
 from functools import lru_cache
+
+# Project root is one level above the backend/ directory
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+ENV_FILE = PROJECT_ROOT / ".env"
 
 
 class Settings(BaseSettings):
@@ -23,6 +29,7 @@ class Settings(BaseSettings):
     # --- Supabase ---
     supabase_url: str = Field(default="", description="Supabase Project URL")
     supabase_key: str = Field(default="", description="Supabase Anon Key")
+    supabase_publishable_key: str = Field(default="", description="Supabase Publishable Key")
     supabase_service_key: str = Field(default="", description="Supabase Service Role Key")
 
     # --- Ollama (Local LLM) ---
@@ -36,7 +43,7 @@ class Settings(BaseSettings):
     whisper_compute_type: str = Field(default="float16", description="Compute type for Whisper")
     whisper_language: str = Field(default="", description="Whisper language code — leave empty for auto-detect (Hindi/English)")
     piper_model_path: str = Field(default="models/piper/en_US-lessac-medium.onnx", description="Path to English Piper TTS model")
-    piper_hindi_model_path: str = Field(default="models/piper/hi_IN-swara-medium.onnx", description="Path to Hindi Piper TTS model")
+    piper_hindi_model_path: str = Field(default="models/piper/hi_IN-pratham-medium.onnx", description="Path to Hindi Piper TTS model")
 
     # --- Language / Multilingual ---
     supported_languages: str = Field(default="en,hi,hi-en", description="Supported languages: en, hi, hi-en (Hinglish)")
@@ -77,9 +84,10 @@ class Settings(BaseSettings):
         return bool(self.supabase_url and self.supabase_key)
 
     model_config = {
-        "env_file": ".env",
+        "env_file": str(ENV_FILE),
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
+        "extra": "ignore",
     }
 
 

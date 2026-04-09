@@ -149,13 +149,17 @@ class LocalModelEngine:
             }
 
     def _chat_sync(self, model: str, messages: list, max_tokens: int, temperature: float):
-        """Synchronous chat completion."""
+        """Synchronous chat completion.
+        Note: num_gpu=0 forces CPU inference to avoid CUDA shared memory
+        conflict with system cuBLAS. Remove once CUDA libs are aligned.
+        """
         return self.client.chat(
             model=model,
             messages=messages,
             options={
                 "num_predict": max_tokens,
                 "temperature": temperature,
+                "num_gpu": 0,  # Force CPU — avoids cuBLAS CUDA conflict
             },
         )
 

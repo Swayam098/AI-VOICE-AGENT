@@ -24,7 +24,7 @@ const InteractionPanel = ({ onNewLog, isProcessing }) => {
       onNewLog({ type: 'user', text: textToProcess, timestamp: new Date().toLocaleTimeString() });
       onNewLog({ 
         type: 'agent', 
-        text: data.message, 
+        text: data.response, 
         timestamp: new Date().toLocaleTimeString(),
         metadata: data
       });
